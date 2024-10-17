@@ -41,11 +41,13 @@ st.markdown(
 )
 
 
-def show_insights_page(parsed_results):
+def show_insights_page(parsed_results, user_role):
     if parsed_results:
         st.write("Generating insights... .. ..")
-        insights = generate_llm_insights(parsed_results)  # Corrected call
-        st.write("### Insights Generated:")
+        # insights = generate_llm_insights(parsed_results)  # Corrected call
+        insights = generate_llm_insights(parsed_results, user_role)
+        # st.write("### Insights Generated:")
+        st.write(f"### Insights Generated:")
         st.write(insights)
     else:
         st.error(
@@ -157,8 +159,15 @@ if 'dom_content' in st.session_state:
         st.write("### Parsed Result:")
         st.write(parsed_results)
 
-    if st.button('Generate Insights') and 'parsed_results' in st.session_state:
-        # Pass parsed results to insights generation function
-        show_insights_page(st.session_state['parsed_results'])
+     # Add input for actionable insights
+    user_role = st.text_input(
+        "Enter your role or the type of actionable insights you want (e.g., student, recruiter, business person)"
+    )
 
-# Function to show insights page
+    if st.button('Generate Insights') and 'parsed_results' in st.session_state:
+        if user_role:
+            # Pass parsed results and user_role to insights generation function
+            show_insights_page(st.session_state['parsed_results'], user_role)
+        else:
+            st.error(
+                "Please enter your role or the type of actionable insights you want.")
