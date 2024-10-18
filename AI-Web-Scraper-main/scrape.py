@@ -1,73 +1,45 @@
+
+
+from sentence_transformers import SentenceTransformer
+import numpy as np
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium import webdriver
 from selenium.webdriver import Remote, ChromeOptions
-from selenium.webdriver.chromium.remote_connection import ChromiumRemoteConnection
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
-import os
 from selenium.webdriver.common.action_chains import ActionChains
 import time
-from anticaptchaofficial.recaptchav2proxyless import *
 
-load_dotenv()
+from annoy import AnnoyIndex
 
-SBR_WEBDRIVER = os.getenv("SBR_WEBDRIVER")
+from playwright.sync_api import sync_playwright
 
-# brightdata --code --sym errors
-# def scrape_website(website):
-#     print("Connecting to Scraping Browser...")
-#     sbr_connection = ChromiumRemoteConnection(SBR_WEBDRIVER, "goog", "chrome")
-#     with Remote(sbr_connection, options=ChromeOptions()) as driver:
-#         driver.get(website)
-#         print("Waiting captcha to solve...")
-#         solve_res = driver.execute(
-#             "executeCdpCommand",
-#             {
-#                 "cmd": "Captcha.waitForSolve",
-#                 "params": {"detectTimeout": 10000},
-#             },
-#         )
-#         print("Captcha solve status:", solve_res["value"]["status"])
-#         print("Navigated! Scraping page content...")
-#         html = driver.page_source
-#         return html
+import streamlit as st
 
 
-def scrape_website(website):
-    print("Launching chrome browser...")
+from playwright.sync_api import sync_playwright
+from bs4 import BeautifulSoup
 
-    chrome_driver_path = ""
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--enable-javascript")  # Enable JavaScript
-    options.add_argument(
-        "--disable-blink-features=AutomationControlled")  # Avoid detection
-    options.add_argument("--incognito")  # Launch browser in incognito mode
 
-    # Enable cookies
-    options.add_argument("--enable-cookies")
-    # options.add_argument('--proxy-server=http://your_proxy_address:port')
+def scrape_website(website_url):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+        # Use a browser context to set the user agent
+        context = browser.new_context(
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+            viewport={'width': 1920, 'height': 1080}
+        )
+        page = context.new_page()
 
-    driver = webdriver.Chrome(service=Service(
-        chrome_driver_path), options=options)
-    # Simulate human-like interaction
-    action = ActionChains(driver)
-    action.move_by_offset(100, 200).perform()  # Move the mouse
-    time.sleep(3)  # Delay to simulate human interaction
-
-    try:
-        driver.get(website)
+        # Navigate to the website
+        page.goto(website_url)
+        page.wait_for_selector('body')  # Wait for the body to load
         print("Page loaded...")
-        html = driver.page_source
+
+        html = page.content()  # Get the HTML content of the page
+        browser.close()
 
         return html
-    finally:
-        driver.quit()
 
 
 def extract_body_content(html_content):
@@ -84,7 +56,6 @@ def clean_body_content(body_content):
     for script_or_style in soup(["script", "style"]):
         script_or_style.extract()
 
-    # Get text or further process the content
     cleaned_content = soup.get_text(separator="\n")
     cleaned_content = "\n".join(
         line.strip() for line in cleaned_content.splitlines() if line.strip()
@@ -93,7 +64,35 @@ def clean_body_content(body_content):
     return cleaned_content
 
 
-def split_dom_content(dom_content, max_length=8000):
-    return [
-        dom_content[i: i + max_length] for i in range(0, len(dom_content), max_length)
-    ]
+def split_dom_content(dom_content, chunk_size=250):
+    words = dom_content.split()
+    return [' '.join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+
+
+def generate_embeddings(chunks, embedding_model):
+    embeddings = embedding_model.encode(
+        chunks,
+        convert_to_numpy=True,
+        batch_size=8  # Adjust batch size as needed
+    )
+    return embeddings
+
+
+def store_embeddings(embeddings):
+    dimension = embeddings.shape[1]
+    index = AnnoyIndex(dimension, 'angular')
+    for i, vector in enumerate(embeddings):
+        index.add_item(i, vector)
+    index.build(10)  # Number of trees
+    return index
+
+# When the user provides a parsing description, the function generates an embedding for the query using the same embedding model.
+# It then searches the Annoy index to find the top k chunks that are most similar to the query embedding.
+
+
+def retrieve_relevant_chunks(query, index, chunks, embedding_model, top_k=5):
+    query_embedding = embedding_model.encode([query], convert_to_numpy=True)
+    indices = index.get_nns_by_vector(
+        query_embedding[0], top_k, include_distances=False)
+    relevant_chunks = [chunks[i] for i in indices]
+    return relevant_chunks

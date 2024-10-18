@@ -6,3 +6,7 @@ beautifulsoup4
 lxml 
 html5lib
 python-dotenv
+faiss-cpu
+transformers
+sentence-transformers
+elasticsearch
