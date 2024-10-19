@@ -1,5 +1,5 @@
 
-
+import cloudscraper
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from selenium.webdriver.chrome.options import Options
@@ -21,25 +21,48 @@ from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 
 
+# def scrape_website(website_url):
+#     # Using cloudscraper to bypass 403 errors
+#     scraper = cloudscraper.create_scraper()  # Create a cloudscraper instance
+#     response = scraper.get(website_url)
+
+#     with sync_playwright() as p:
+#         browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+#         # Use a browser context to set the user agent
+#         context = browser.new_context(
+#             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+#             viewport={'width': 1920, 'height': 1080}
+#         )
+#         page = context.new_page()
+
+#         # Navigate to the website
+#         page.goto(website_url)
+#         page.wait_for_selector('body')  # Wait for the body to load
+#         print("Page loaded...")
+
+#         html = page.content()  # Get the HTML content of the page
+#         browser.close()
+
+#         return html
+
+import cloudscraper
+from bs4 import BeautifulSoup
+
+
 def scrape_website(website_url):
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-        # Use a browser context to set the user agent
-        context = browser.new_context(
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
-            viewport={'width': 1920, 'height': 1080}
-        )
-        page = context.new_page()
+    # Using cloudscraper to bypass 403 errors
+    scraper = cloudscraper.create_scraper()  # Create a cloudscraper instance
+    response = scraper.get(website_url)
 
-        # Navigate to the website
-        page.goto(website_url)
-        page.wait_for_selector('body')  # Wait for the body to load
-        print("Page loaded...")
+    if response.status_code == 200:
+        print("Page successfully scraped using cloudscraper...")
+        html = response.content
+    else:
+        print(
+            f"Failed to scrape the website. Status code: {response.status_code}")
+        html = None
 
-        html = page.content()  # Get the HTML content of the page
-        browser.close()
-
-        return html
+    return html
 
 
 def extract_body_content(html_content):
@@ -64,7 +87,7 @@ def clean_body_content(body_content):
     return cleaned_content
 
 
-def split_dom_content(dom_content, chunk_size=250):
+def split_dom_content(dom_content, chunk_size=500):
     words = dom_content.split()
     return [' '.join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
 
